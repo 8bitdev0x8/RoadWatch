@@ -36,6 +36,10 @@ Keep PowerShell open and visit http://127.0.0.1:8765 in Edge on p039. The server
 
 The page loads existing runtime assessments, requests one new assessment per explicit click, and can submit a reviewed candidate as one XProtect event. Enter the gateway password for assessments and the roadwatch-dev basic-user password for events. Credentials are not stored. Camera and event GUID defaults match the current p039 setup; replace them after a rebuild.
 
+The incident desk provides search, open/review/closed filters, observation details, UTC playback windows, delivery status, and a local operator response history. Operators can acknowledge, mark responding, dismiss, reopen, or confirm clearance with a required note. Clearance requires explicit verification. These local statuses do not synchronize XProtect alarm states. Each assessment remains its own item; repeated observations are not automatically grouped. Camera names are currently mapped only for the known p039 breakdown camera; other cameras display their GUID.
+
+The visual design takes cues from Hafnia's public website: deep navy surfaces, sapphire primary actions, white headings, rounded controls, and clear spacing. It is an independent hackathon interface, not an official Hafnia design system. Video playback stays in XProtect. Forms preserve in-tab drafts while filtering or switching items; credentials are only entered in operation-specific dialogs. Drafts are not durable until saved.
+
 An event marked accepted still needs confirmation in Smart Client. A submission marked attempting may have been delivered: inspect Alarm Manager before retrying. Only one modifying operation runs at a time. The page has no automatic retries, camera video player, geometry detection, acknowledgement synchronization, or continuous monitoring.
 
 Run local HTTP tests without XProtect or Hafnia:

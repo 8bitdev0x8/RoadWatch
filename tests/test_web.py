@@ -34,11 +34,14 @@ class WebTests(unittest.TestCase):
     def test_page_and_history(self):
         with self.opener.open(self.base) as response:
             page = response.read().decode()
-            self.assertIn('Assessment history', page)
+            self.assertIn('Incident queue', page)
             self.assertNotIn('__TOKEN__', page)
             self.assertEqual(response.headers['Cache-Control'], 'no-store')
         with self.opener.open(self.base + '/api/results') as response:
             self.assertIsInstance(json.load(response), list)
+        with self.opener.open(self.base + '/app.css') as response:
+            self.assertIn('text/css', response.headers['Content-Type'])
+            self.assertIn('#081927', response.read().decode())
 
     def test_untrusted_post_rejected(self):
         request = urllib.request.Request(self.base + '/api/check', data=b'{}')
@@ -73,6 +76,35 @@ class WebTests(unittest.TestCase):
                 self.assertNotIn('fake-test-only', text)
                 self.assertEqual(json.loads(text)['result']['disposition'], 'needs_review')
             self.assertEqual(check.call_count, 1)
+
+    def test_incident_clearance_and_stale_update(self):
+        summary = '7c3f3eb7-fd94-4536-adfd-b7f4f1020f8e'
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'runtime').mkdir()
+            (root / 'runtime' / (summary + '.json')).write_text('{}')
+            def submit(body):
+                request = urllib.request.Request(self.base + '/api/incident',
+                    data=json.dumps({'summary_id': summary, **body}).encode(),
+                    headers={'Origin': self.base, 'X-RoadWatch-Token': web.TOKEN})
+                return self.opener.open(request)
+            with patch.object(web, 'ROOT', root), patch.object(web.roadwatch_event, 'main') as send:
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    submit({'status': 'cleared', 'expected_status': 'new', 'note': 'Claimed clearance'})
+                self.assertEqual(error.exception.code, 400)
+                with submit({'status': 'acknowledged', 'expected_status': 'new', 'note': 'Reviewed clip'}):
+                    pass
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    submit({'status': 'responding', 'expected_status': 'new', 'note': 'Stale update'})
+                self.assertEqual(error.exception.code, 409)
+                with submit({'status': 'cleared', 'expected_status': 'acknowledged',
+                             'note': 'Field report confirmed route clear', 'clearance_verified': True}):
+                    pass
+                saved = json.loads((root / 'runtime' / (summary + '.incident.json')).read_text())
+                self.assertEqual(saved['status'], 'cleared')
+                self.assertEqual(len(saved['history']), 2)
+                self.assertEqual(saved['history'][0]['note'], 'Reviewed clip')
+                send.assert_not_called()
 
 
 if __name__ == '__main__':

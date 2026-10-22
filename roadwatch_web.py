@@ -1,6 +1,7 @@
 """Local RoadWatch operator interface. Run on p039: py roadwatch_web.py."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import datetime as dt
 from pathlib import Path
 import secrets
 import threading
@@ -27,6 +28,10 @@ def results():
             value['submission'] = json.loads(marker.read_text(encoding='utf-8')).get('status', 'attempting') if marker.exists() else 'not_sent'
             review = path.with_name(path.stem + '.review.json')
             value['human_review'] = json.loads(review.read_text(encoding='utf-8')) if review.exists() else None
+            incident = path.with_name(path.stem + '.incident.json')
+            value['incident'] = json.loads(incident.read_text(encoding='utf-8')) if incident.exists() else {'status': 'new', 'history': []}
+            value['camera_name'] = ('vehicle_breakdown_traffic_queue' if value.get('camera_id') ==
+                                    '3ccadc04-93aa-46ea-823a-6c0f3de83055' else value.get('camera_id', 'Unknown camera'))
             output.append(value)
         except (ValueError, OSError):
             continue
@@ -58,13 +63,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, (ROOT / 'web/index.html').read_text(encoding='utf-8').replace('__TOKEN__', TOKEN), 'text/html')
         if self.path == '/api/results':
             return self.reply(200, results())
+        if self.path == '/app.css':
+            return self.reply(200, (ROOT / 'web/app.css').read_text(encoding='utf-8'), 'text/css')
         return self.reply(404, {'error': 'Not found'})
 
     def do_POST(self):
         if (not self.valid_host() or self.headers.get('Origin') != 'http://' + HOST or
                 not secrets.compare_digest(self.headers.get('X-RoadWatch-Token', ''), TOKEN)):
             return self.reply(403, {'error': 'Reload the local RoadWatch page.'})
-        if self.path not in {'/api/check', '/api/send', '/api/review'}:
+        if self.path not in {'/api/check', '/api/send', '/api/review', '/api/incident'}:
             return self.reply(404, {'error': 'Not found'})
         if not LOCK.acquire(blocking=False):
             return self.reply(409, {'error': 'Another operation is running. Wait for it to finish.'})
@@ -73,6 +80,34 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 8192:
                 raise ValueError('Invalid request size')
             body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise ValueError('Expected a JSON object')
+            if self.path == '/api/incident':
+                summary = str(uuid.UUID(body['summary_id']))
+                path = ROOT / 'runtime' / (summary + '.json')
+                if not path.exists():
+                    raise ValueError('Assessment not found')
+                state = body.get('status')
+                if state not in {'new', 'acknowledged', 'responding', 'cleared', 'dismissed'}:
+                    raise ValueError('Invalid incident status')
+                note = body.get('note', '')
+                if not isinstance(note, str) or not note.strip() or len(note) > 2000:
+                    raise ValueError('Add an action or evidence note (1-2000 characters)')
+                if state == 'cleared' and body.get('clearance_verified') is not True:
+                    raise ValueError('Verify clearance against footage or a field report before closing')
+                target = path.with_name(summary + '.incident.json')
+                incident = json.loads(target.read_text(encoding='utf-8')) if target.exists() else {'status': 'new', 'history': []}
+                if body.get('expected_status') != incident['status']:
+                    return self.reply(409, {'error': 'Incident changed. Refresh before updating.'})
+                incident['history'].append({'from_status': incident['status'], 'status': state,
+                    'note': note.strip(), 'time_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+                    'clearance_verified': state == 'cleared'})
+                incident['status'] = state
+                temp = target.with_suffix('.tmp')
+                temp.write_text(json.dumps(incident, indent=2), encoding='utf-8')
+                temp.replace(target)
+                self.reply(200, {'message': 'RoadWatch status saved. XProtect alarm state is unchanged.'})
+                return
             if self.path == '/api/review':
                 summary = str(uuid.UUID(body['summary_id']))
                 path = ROOT / 'runtime' / (summary + '.json')
@@ -84,7 +119,6 @@ class Handler(BaseHTTPRequestHandler):
                 notes = body.get('notes', '')
                 if not isinstance(notes, str) or len(notes) > 2000:
                     raise ValueError('Review notes must be at most 2000 characters')
-                import datetime as dt
                 review = {'verdict': verdict, 'notes': notes,
                           'reviewed_utc': dt.datetime.now(dt.timezone.utc).isoformat()}
                 path.with_name(summary + '.review.json').write_text(json.dumps(review, indent=2), encoding='utf-8')
