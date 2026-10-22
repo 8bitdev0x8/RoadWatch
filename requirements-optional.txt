@@ -1,0 +1,3 @@
+# Optional spatial experiment only. The web app itself uses Python's standard library.
+# Review Ultralytics model/software licensing for your intended distribution.
+ultralytics>=8.3,<9

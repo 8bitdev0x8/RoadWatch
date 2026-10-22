@@ -45,6 +45,8 @@ def interpret(raw):
                      value['road_context'] == 'managed_roadworks' and
                      value['traffic_effect'] == 'managed_merge')
         review = conflict or value['assessment'] == 'uncertain' or value['visibility'] == 'limited'
+        if value['assessment'] == 'obstructed' and (value['persists_within_clip'] is not True or value['road_context'] == 'uncertain'):
+            review = True
         return {'disposition': 'needs_review' if review else
                 ('candidate_obstruction' if value['assessment'] == 'obstructed' else 'no_target_observed'),
                 'assessment': value, 'conflicting_fields': bool(conflict)}
@@ -56,7 +58,21 @@ def main(argv=None, password=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--camera-id', required=True, type=uuid.UUID)
     parser.add_argument('--seconds', type=int, choices=range(5, 61), default=15, metavar='5..60')
+    parser.add_argument('--start', help='Optional recorded clip start, ISO UTC')
+    parser.add_argument('--end', help='Optional recorded clip end, ISO UTC')
     args = parser.parse_args(argv)
+    if bool(args.start) != bool(args.end):
+        raise ValueError('Supply both start and end times')
+    clip_end = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
+    clip_start = clip_end - dt.timedelta(seconds=args.seconds)
+    if args.start:
+        from roadwatch_store import instant
+        clip_start, clip_end = instant(args.start), instant(args.end)
+        if not 5 <= (clip_end - clip_start).total_seconds() <= 60:
+            raise ValueError('Recorded interval must be 5-60 seconds')
+        age = (dt.datetime.now(dt.timezone.utc) - clip_start).total_seconds()
+        if age > 86400 or clip_end > dt.datetime.now(dt.timezone.utc):
+            raise ValueError('Use a past interval within the retained 24 hours')
     prompt = (ROOT / 'prompts/road-obstruction.txt').read_text(encoding='utf-8')
     # This client accepts only the provisioned local gateway's self-signed cert.
     context = ssl._create_unverified_context()
@@ -77,8 +93,7 @@ def main(argv=None, password=None):
             password = getpass.getpass('Local Hafnia gateway password (not saved): ')
         session = call('POST', '/api/Sessions/Login', {'Name': 'administrator', 'Password': password})['Id']
         del password
-        end = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
-        start = end - dt.timedelta(seconds=args.seconds)
+        end, start = clip_end, clip_start
         stamp = lambda value: value.strftime('%Y-%m-%dT%H:%M:%SZ')
         began = time.monotonic()
         summary = call('POST', '/api/Summaries', {'Prompt': prompt, 'VideoUris': [
