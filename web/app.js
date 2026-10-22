@@ -34,20 +34,28 @@ function captureDraft(){const p=$('detail');if(p.dataset.incident)draft.set(p.da
 function renderDetail(i){
  const p=$('detail'),signature=JSON.stringify(i);if(signature===detailSignature)return;
  captureDraft();detailSignature=signature;p.replaceChildren();p.dataset.incident=i?.id||'';
- if(!i){p.append(N('div','Select an incident to review its evidence and next steps.','empty'));return;}
+ if(!i){p.append(N('div','Select an incident to see its timeline.','empty'));return;}
  const latest=i.observations[0],assessment=latest.assessment||{};
- const heading=N('div',undefined,'incident-heading');heading.append(badge(i.kind==='review'?'Needs your review':'Possible road obstruction',i.kind==='review'?'pink':'amber'),badge(titles[i.status],closed(i)?'green':''));
- p.append(heading,N('h2',friendly(i.camera_name)));
- const steps=N('ol',undefined,'workflow-steps');for(const text of ['Review evidence','Send alarm','Record response'])steps.append(N('li',text));p.append(steps);
- p.append(N('h3','What was observed'),N('div',assessment.evidence||latest.validation_error||'Model output needs review.','evidence'));
- const context=N('p',`${utc(latest.start_utc)} – ${utc(latest.end_utc)} · ${i.observations.length} observations`,'clip-context');p.append(context);
- const playback=N('div',undefined,'bar');playback.append(button('Copy clip details',()=>navigator.clipboard.writeText(`Camera: ${i.camera_name}\nID: ${i.camera}\nUTC: ${latest.start_utc} to ${latest.end_utc}`).then(()=>notice('Copied. Open this camera and time in XProtect playback.')).catch(()=>notice('Clipboard unavailable. Use the UTC window shown.'))),button('Bookmark clip in XProtect',()=>{if(requireConnection())confirm('Bookmark this clip?','Adds a video bookmark in XProtect. No Hafnia request.',()=>act('/api/bookmark',{incident_id:i.id}));}));p.append(playback);
- if(i.synthetic)p.append(N('p','Test footage · repeated loops do not establish continuous obstruction.','muted'));
- const delivery=N('section',undefined,'delivery-card');
- const sent=i.delivery.status==='accepted',unknown=!sent&&i.delivery.status!=='not_sent';
- delivery.append(N('strong',sent?'Event sent to XProtect':unknown?'Check delivery in XProtect':'Ready for operator review'),N('p',sent?'Open Alarm Manager to confirm the alarm. Event acceptance does not verify alarm creation.':unknown?'A submission was attempted. Check Alarm Manager before retrying.':i.kind==='review'?'Resolve the model uncertainty before sending an alarm.':'Review the footage, then send this candidate to the control-room alarm list.','muted'));
- const send=button(sent?'Event already sent':'Send alarm to XProtect',()=>{if(requireConnection())confirm('Send this incident to XProtect?','Creates one candidate event. An alarm is created only if the XProtect definition matches this camera. Review the clip first.',()=>act('/api/send',{incident_id:i.id}));},true);
- send.disabled=i.delivery.status!=='not_sent'||closed(i)||i.kind==='review'||activeJob();delivery.append(send);p.append(delivery,N('h3','Record your response'));
+ const heading=N('div',undefined,'incident-heading');heading.append(badge(i.kind==='review'?'Needs review':'Possible obstruction',i.kind==='review'?'pink':'amber'),badge(titles[i.status],closed(i)?'green':''));
+ p.append(heading,N('h2',friendly(i.camera_name)),N('p',`${i.observations.length} observations · First seen ${utc(i.first)}`,'muted'));
+ const events=[];
+ for(const [index,o]of [...i.observations].reverse().entries())events.push({time:o.end_utc,title:index===0?'First observation':'Observed again',kind:'observation',observation:o,first:index===0});
+ for(const h of i.history)if(h.action!=='opened')events.push({time:h.time,title:titles[h.action]||h.action,body:h.note,kind:'operator'});
+ if(i.delivery.status!=='not_sent')events.push({time:i.delivery.time||i.delivery.response?.data?.time||i.last,title:i.delivery.status==='accepted'?(i.delivery.time?'Event sent to XProtect':'Accepted event · recorded video time'):'Event submission attempted',body:i.delivery.status==='accepted'?'Event accepted. Confirm the alarm in Smart Client.':'Delivery may be uncertain. Check Alarm Manager before another attempt.',kind:'delivery'});
+ events.sort((a,b)=>new Date(a.time)-new Date(b.time));
+ const timeline=N('ol',undefined,'incident-timeline');timeline.setAttribute('aria-label','Incident timeline');
+ for(const event of events){const row=N('li',undefined,'event-row '+event.kind),time=N('time',utc(event.time));time.dateTime=event.time;row.append(time,N('strong',event.title));
+  if(event.observation){const o=event.observation;const evidence=o.assessment?.evidence||o.validation_error||'Review model output.';if(event.first)row.append(N('p',evidence));else{const details=N('details');details.append(N('summary','View observation'),N('p',evidence));row.append(details);}const actions=N('div',undefined,'event-links');actions.append(button('Copy clip time',()=>navigator.clipboard.writeText(`Camera: ${i.camera_name}\nUTC: ${o.start_utc} to ${o.end_utc}`).then(()=>notice('Clip details copied for XProtect playback.')).catch(()=>notice('Clipboard unavailable. Use the timestamp shown.'))),button('Review accuracy',()=>openEvaluation(o.summary_id)));row.append(actions);
+  }else row.append(N('p',event.body));
+  timeline.append(row);
+ }
+ p.append(timeline);
+ const toolbar=N('div',undefined,'report-actions');toolbar.append(button('Print timeline',()=>window.print()),button('Bookmark latest clip',()=>{if(requireConnection())confirm('Bookmark this clip?','Adds a bookmark in XProtect. No Hafnia request.',()=>act('/api/bookmark',{incident_id:i.id}));}));p.append(toolbar);
+ const actions=N('section',undefined,'timeline-next');actions.append(N('h3','Next step'));
+ const send=button(i.delivery.status==='accepted'?'Event already sent':'Send to XProtect',()=>{if(requireConnection())confirm('Send this incident to XProtect?','Creates one candidate event. Alarm creation depends on your XProtect alarm definition matching this camera.',()=>act('/api/send',{incident_id:i.id}));},true);
+ send.disabled=i.delivery.status!=='not_sent'||closed(i)||i.kind==='review'||activeJob();actions.append(send);
+ if(i.kind==='review')actions.append(N('p','Review the uncertain assessment before sending an event.','muted'));
+ p.append(actions,N('h3','Add a response'));
  const form=N('form'),label=N('label','Next action'),status=N('select');status.id='responseStatus';label.htmlFor=status.id;
  for(const [value,text]of Object.entries({acknowledged:'Acknowledge — I am reviewing this',responding:'Responding — action is underway',cleared:'Resolve — the road is clear',dismissed:'Dismiss — no action needed',new:'Reopen for review'})){const o=N('option',text);o.value=value;status.append(o);}
  status.value=i.status==='new'?'acknowledged':i.status;label.append(status);
@@ -56,9 +64,9 @@ function renderDetail(i){
  const save=N('button','Save response');form.append(label,noteLabel,clearLabel,save);
  const syncAction=()=>{clearLabel.hidden=status.value!=='cleared';save.textContent={acknowledged:'Acknowledge incident',responding:'Save response',cleared:'Resolve incident',dismissed:'Dismiss incident',new:'Reopen incident'}[status.value];};status.onchange=syncAction;
  form.onsubmit=async e=>{e.preventDefault();if(status.value==='cleared'&&!verified.checked)return notice('Confirm that the road is clear before resolving.',true);const result=await act('/api/incident',{incident_id:i.id,version:i.version,status:status.value,note:note.value,clearance_verified:verified.checked});if(result){draft.delete(i.id);p.dataset.incident='';detailSignature='';renderInbox();}};p.append(form);
- const activity=N('details');activity.append(N('summary',`Activity · ${i.history.length} updates`));const history=N('ul',undefined,'timeline');for(const h of i.history){const li=N('li');li.append(N('strong',titles[h.action]||'Opened'),N('div',utc(h.time),'mono'),N('p',h.note));history.append(li);}activity.append(history);p.append(activity);
- const observations=N('details');observations.append(N('summary',`Evidence history · ${i.observations.length} observations`));for(const o of i.observations){const entry=N('div',undefined,'observation');entry.append(N('strong',utc(o.end_utc)),N('p',o.assessment?.evidence||o.validation_error),button('Evaluate result',()=>openEvaluation(o.summary_id)));observations.append(entry);}p.append(observations);
- const technical=N('details');technical.append(N('summary','Technical details'),N('pre',JSON.stringify({incident:i.id,camera:i.camera,first:i.first,last:i.last,observed_seconds:i.observed_seconds,persistence_verified:false,assessment,delivery:i.delivery},null,2)));p.append(technical,N('p','Response notes stay in RoadWatch. Handle XProtect alarm acknowledgement in Smart Client.','muted'));
+
+ const technical=N('details');technical.append(N('summary','Details and model output'),N('pre',JSON.stringify({incident:i.id,camera:i.camera,first:i.first,last:i.last,observed_seconds:i.observed_seconds,persistence_verified:false,assessment,delivery:i.delivery},null,2)));p.append(technical);
+ p.append(N('p',(i.synthetic?'Synthetic test footage. Repeated loops do not prove continuous obstruction. ':'')+'Response updates stay in RoadWatch; XProtect alarm status is separate.','muted'));
  const saved=draft.get(i.id);if(saved)[...p.querySelectorAll('form input,form select,form textarea')].forEach((e,n)=>{if(saved[n]){e.value=saved[n].value;e.checked=saved[n].checked;}});syncAction();
 }
 function renderCameras(){if($('regionDialog').open)return;const checked=new Set([...document.querySelectorAll('input[name=monitorCamera]:checked')].map(e=>e.value));$('cameraCards').replaceChildren();$('monitorCameras').replaceChildren();for(const c of state.cameras){const card=N('article',undefined,'panel camera-card');card.append(badge(c.synthetic?'Synthetic test':c.looping?'Looping footage':'Live source'),N('h2',friendly(c.name)),N('p',c.regions?'Road regions saved':'Road regions not configured','muted'),button('Set road regions',()=>{if(!requireConnection())return;regionCamera=c;act('/api/frame',{camera_id:c.id});}));$('cameraCards').append(card);const label=N('label',undefined,'checkline'),check=N('input');check.type='checkbox';check.name='monitorCamera';check.value=c.id;check.checked=checked.has(c.id)||(!cameraSignature&&c.name==='vehicle_breakdown_traffic_queue');check.onchange=updateMonitorPreview;label.append(check,N('span',friendly(c.name)));$('monitorCameras').append(label);}}

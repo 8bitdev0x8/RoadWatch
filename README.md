@@ -20,6 +20,8 @@ Keep PowerShell open. In **Edge inside p039**, open **http://127.0.0.1:8765**. D
 4. Review an incident's observations and UTC window in Smart Client. **Send to XProtect** explicitly, then confirm its alarm. Optionally create a bookmark for the evidence window.
 5. Save acknowledgement or response notes. Clearance requires a note and explicit human verification. RoadWatch status does not synchronize XProtect alarm state.
 
+The incident report is a chronological timeline of observations, event delivery, and operator responses. Repeated observation evidence can be expanded. Print timeline provides a clean report layout. Apple system typography is used where available, with Segoe UI fallback on Windows; no proprietary Apple font files are bundled.
+
 Restart after an update with Ctrl+C, git pull, py roadwatch_web.py, then Ctrl+F5 in Edge. Connection credentials and monitoring sessions must be entered/started again after restart. Observations and response history persist.
 
 For a UI-only preview on any computer, run `py roadwatch_web.py --demo`. It uses temporary labelled sample data and blocks live upstream actions. Demo changes disappear when the process stops.
