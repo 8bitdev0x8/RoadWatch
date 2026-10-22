@@ -26,13 +26,13 @@ For a UI-only preview on any computer, run `py roadwatch_web.py --demo`. It uses
 
 ## Monitoring
 
-Open **Cameras**, choose 1-3 cameras and configure a bounded session. Default: at most five requests, five minutes between checks, thirty minutes maximum. The displayed cap is an upper bound; the time limit may stop the session first. A summary already submitted may finish after Stop or the time limit.
+Open **Monitor**, choose 1-3 cameras and select **Quick test** (up to three checks, one minute apart, five-minute limit) or **Standard** (up to five checks, five minutes apart, thirty-minute limit). Custom limits are optional. The displayed cap is an upper bound; the time limit may stop the session first. A summary already submitted may finish after Stop or the time limit. Camera regions and source details are under **Camera setup**.
 
 RoadWatch reserves request attempts durably, including failed or ambiguous ones. Default daily app cap: 100; gateway reserve: 50. Before each assessment it checks the gateway's actual reported quota. Missing quota or an exhausted reserve blocks requests. Three consecutive failures pause a session. Failed submissions are not automatically retried, and sessions never auto-resume.
 
 Repeated same-camera/type observations within ten minutes group into one open episode. Grouping is not proof of object identity or continuity. Closed items stay closed; a later observation starts another item. Clear/uncertain observations never silently resolve an incident. Event delivery is claimed once per incident before its POST; uncertain delivery remains blocked pending operator investigation.
 
-Automatic event delivery is off by default and rejected for synthetic/looping sources. Experimental live-source auto delivery requires at least two non-overlapping candidate observations. This threshold is not validated to establish a real-world persistent hazard. Keep operator review for the supplied test footage.
+Automatic event delivery is off by default, configured only under **Settings > Advanced alarm delivery**, and disabled/unselected when a selected camera is synthetic or looping. Experimental live-source auto delivery requires at least two non-overlapping candidate observations. This threshold is not validated to establish a real-world persistent hazard. Keep operator review for the supplied test footage.
 
 ## Road regions and optional spatial experiment
 
