@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RoadWatch - Lane marker</title>
+<style>body{font:16px system-ui;background:#101b29;color:#e8eff7;margin:24px;max-width:1200px}h1{margin-bottom:8px}p{line-height:1.5;color:#b9cadb}button,input,select{font:inherit;padding:10px;margin:5px 5px 5px 0}button{cursor:pointer}canvas{display:block;width:100%;height:auto;background:#182b40;touch-action:none;border:1px solid #51677e;margin-top:16px}label{display:inline-block}#status{min-height:24px;color:#86e9dc}pre{white-space:pre-wrap}a{color:#86e9dc}</style>
+<h1>RoadWatch <small> / Lane marker</small></h1>
+<p>Load a camera frame. Select a region, then click around its boundary in order. Draw the open traffic lane and closed work area separately. Coordinates describe this exact image; keep the camera view fixed. Prefer a clean video frame without player controls.</p>
+<label>Camera name <input id="camera" value="traffic_flows_in_the_open_lanes"></label>
+<label>Camera frame <input id="file" type="file" accept="image/*"></label><br>
+<label>Region <select id="region"><option value="open_lane">Open traffic lane (cyan)</option><option value="work_area">Closed work area (orange)</option></select></label>
+<button id="undo">Undo point</button><button id="clear">Clear selected region</button><button id="export">Export regions JSON</button>
+<p id="status" role="status">Choose an image to start.</p>
+<canvas id="canvas" width="1000" height="560" aria-label="Camera image with editable polygon regions"></canvas>
+<p>Polygons need at least three points and must not cross themselves. These are human annotations, not automatic detection. This tool does not call Hafnia or consume requests. Images stay in this browser tab.</p>
+<script>
+'use strict';
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),status=document.getElementById('status');
+const region=document.getElementById('region'),file=document.getElementById('file');
+let image=null,points={open_lane:[],work_area:[]};
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);if(image)ctx.drawImage(image,0,0);for(const [name,polygon] of Object.entries(points)){if(!polygon.length)continue;const color=name==='open_lane'?'#52f4df':'#ffb454';ctx.strokeStyle=color;ctx.fillStyle=color+'30';ctx.lineWidth=Math.max(2,canvas.width/450);ctx.beginPath();polygon.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(polygon.length>=3)ctx.closePath();ctx.fill();ctx.stroke();polygon.forEach(([x,y],i)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,Math.max(4,canvas.width/220),0,Math.PI*2);ctx.fill();ctx.font=`${Math.max(14,canvas.width/65)}px sans-serif`;ctx.fillText(String(i+1),x+8,y-8);});} }
+file.onchange=()=>{const f=file.files[0];if(!f)return;const url=URL.createObjectURL(f),next=new Image();next.onload=()=>{URL.revokeObjectURL(url);image=next;canvas.width=next.naturalWidth;canvas.height=next.naturalHeight;points={open_lane:[],work_area:[]};draw();status.textContent='Image loaded. Click boundary points for the selected region.';};next.onerror=()=>{URL.revokeObjectURL(url);status.textContent='Could not load this image. Choose a PNG or JPEG.';};next.src=url;};
+canvas.onclick=e=>{if(!image)return;const r=canvas.getBoundingClientRect();points[region.value].push([(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height]);draw();status.textContent=`${region.value}: ${points[region.value].length} points`;};
+document.getElementById('undo').onclick=()=>{points[region.value].pop();draw();};
+document.getElementById('clear').onclick=()=>{points[region.value]=[];draw();};
+document.getElementById('export').onclick=()=>{if(!image||Object.values(points).some(p=>p.length<3)){status.textContent='Load an image and mark at least three points in each region.';return;}const name=document.getElementById('camera').value.trim();if(!name){status.textContent='Enter a camera name.';return;}const data={schema_version:1,camera_name:name,annotation_status:'requires_review',image_size:{width:canvas.width,height:canvas.height},coordinate_system:'normalized_image_xy',regions:Object.fromEntries(Object.entries(points).map(([k,p])=>[k,p.map(([x,y])=>[Number((x/canvas.width).toFixed(6)),Number((y/canvas.height).toFixed(6))])]))};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='roadwatch-regions.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status.textContent='Exported roadwatch-regions.json. Review boundaries before using for detection.';};
+</script></html>

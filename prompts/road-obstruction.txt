@@ -1,0 +1,16 @@
+Assess whether an unexpected obstruction blocks a lane intended to carry traffic in this clip. Use only visible evidence.
+First distinguish lanes visibly closed by roadworks barriers or cones from lanes open to traffic. Construction equipment or dirt within a visibly closed work area is a managed closure, not an unexpected obstruction. Normal merging past that closure is managed_merge, not unexpected_avoidance.
+Then check the lanes open to traffic for a separate stopped vehicle, person, or object obstructing passage. Roadworks do not rule out a separate obstruction in an open lane. Cones alone do not establish safe management: if the available route or closure context is unclear, report uncertain.
+People beside the road are not an obstruction unless they occupy the usable traffic lane. Ordinary moving traffic and a brief traffic stop are not by themselves unexpected obstructions.
+Report assessment clear when visible traffic uses the available route without a separate unexpected obstruction. Clear means no target obstruction observed in this clip; it does not mean the road is safe in every respect. Report uncertain when visibility or road layout prevents a decision.
+Return only a JSON object with these fields:
+{
+  "assessment": "obstructed | clear | uncertain",
+  "road_context": "managed_roadworks | no_managed_closure_visible | uncertain",
+  "obstruction_type": "person | vehicle | object | none | unknown",
+  "persists_within_clip": true,
+  "traffic_effect": "stopping_behind | unexpected_avoidance | managed_merge | none_visible | unknown",
+  "evidence": "Short factual description of visible evidence",
+  "visibility": "adequate | limited"
+}
+Choose exactly one allowed value for each field. obstruction_type and persists_within_clip refer only to an unexpected obstruction, not equipment in a managed closure. For clear, use obstruction_type none and persists_within_clip false. persists_within_clip must be true, false, or null when uncertain. Explain the visible closure context and any separate obstruction in evidence. Do not infer speeds, exact distances, accident causes, intent, authorization, or events outside the clip. Do not claim the obstruction has persisted beyond the clip. Do not include markdown.
