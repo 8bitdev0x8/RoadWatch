@@ -40,7 +40,7 @@ class HttpTests(unittest.TestCase):
         return self.opener.open(urllib.request.Request(self.base+path,data=json.dumps(body).encode(),headers=headers))
     def test_page_state_and_css(self):
         with self.opener.open(self.base) as response:
-            self.assertIn('Incident inbox',response.read().decode())
+            self.assertIn('<title>RoadWatch</title>',response.read().decode())
             self.assertIn("script-src 'self';",response.headers['Content-Security-Policy'])
         with self.opener.open(self.base+'/api/state') as response:
             value=json.load(response)
