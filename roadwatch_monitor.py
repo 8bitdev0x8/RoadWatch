@@ -87,6 +87,8 @@ class Monitor:
                             self.state['status'] = 'paused_error'
                         break
                 finally:
+                    with self.lock:
+                        self.state['current_camera'] = None
                     self.services.operation.release()
                 index += 1
                 with self.lock:

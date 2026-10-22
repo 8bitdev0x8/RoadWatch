@@ -24,6 +24,8 @@ The incident report is a chronological timeline of observations, event delivery,
 
 The screen uses a Material-inspired light surface and type hierarchy. Only timeline and delivery/status actions are prominent; response fields open in a dialog, with clip tools and technical data behind expandable sections. Design reference: https://m3.material.io/styles/typography/applying-type (an adaptation, not a claim of full Material compliance).
 
+The enlarged timeline uses short Material-inspired transitions for selection, new events, expanding details and dialogs. An indeterminate progress bar indicates actual work, not a fabricated completion percentage. Animations respect prefers-reduced-motion and do not replay on unchanged background polls. Motion reference: https://m3.material.io/styles/motion.
+
 Restart after an update with Ctrl+C, git pull, py roadwatch_web.py, then Ctrl+F5 in Edge. Connection credentials and monitoring sessions must be entered/started again after restart. Observations and response history persist.
 
 For a UI-only preview on any computer, run `py roadwatch_web.py --demo`. It uses temporary labelled sample data and blocks live upstream actions. Demo changes disappear when the process stops.
