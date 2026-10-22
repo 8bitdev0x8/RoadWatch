@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
@@ -44,6 +45,23 @@ class WebTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as error:
             self.opener.open(request)
         self.assertEqual(error.exception.code, 403)
+
+    def test_review_persists_without_upstream_calls(self):
+        summary = '7c3f3eb7-fd94-4536-adfd-b7f4f1020f8e'
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'runtime').mkdir()
+            (root / 'runtime' / (summary + '.json')).write_text('{}')
+            request = urllib.request.Request(self.base + '/api/review',
+                data=json.dumps({'summary_id': summary, 'verdict': 'false_alarm', 'notes': 'Managed merge only'}).encode(),
+                headers={'Origin': self.base, 'X-RoadWatch-Token': web.TOKEN})
+            with patch.object(web, 'ROOT', root), patch.object(web.roadwatch_check, 'main') as check, patch.object(web.roadwatch_event, 'main') as send:
+                with self.opener.open(request) as response:
+                    self.assertEqual(response.status, 200)
+                review = json.loads((root / 'runtime' / (summary + '.review.json')).read_text())
+                self.assertEqual(review['verdict'], 'false_alarm')
+                check.assert_not_called()
+                send.assert_not_called()
 
     def test_explicit_check_uses_password_without_echo(self):
         body = {'camera_id': '3ccadc04-93aa-46ea-823a-6c0f3de83055', 'seconds': 15, 'password': 'fake-test-only'}

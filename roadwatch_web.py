@@ -25,6 +25,8 @@ def results():
             value.update(roadwatch_check.interpret(value.get('raw_response', '')))
             marker = path.with_name(path.stem + '.event-submission.json')
             value['submission'] = json.loads(marker.read_text(encoding='utf-8')).get('status', 'attempting') if marker.exists() else 'not_sent'
+            review = path.with_name(path.stem + '.review.json')
+            value['human_review'] = json.loads(review.read_text(encoding='utf-8')) if review.exists() else None
             output.append(value)
         except (ValueError, OSError):
             continue
@@ -62,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         if (not self.valid_host() or self.headers.get('Origin') != 'http://' + HOST or
                 not secrets.compare_digest(self.headers.get('X-RoadWatch-Token', ''), TOKEN)):
             return self.reply(403, {'error': 'Reload the local RoadWatch page.'})
-        if self.path not in {'/api/check', '/api/send'}:
+        if self.path not in {'/api/check', '/api/send', '/api/review'}:
             return self.reply(404, {'error': 'Not found'})
         if not LOCK.acquire(blocking=False):
             return self.reply(409, {'error': 'Another operation is running. Wait for it to finish.'})
@@ -71,6 +73,23 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 8192:
                 raise ValueError('Invalid request size')
             body = json.loads(self.rfile.read(length))
+            if self.path == '/api/review':
+                summary = str(uuid.UUID(body['summary_id']))
+                path = ROOT / 'runtime' / (summary + '.json')
+                if not path.exists():
+                    raise ValueError('Assessment not found')
+                verdict = body.get('verdict')
+                if verdict not in {'correct', 'false_alarm', 'missed_hazard', 'uncertain'}:
+                    raise ValueError('Choose a review verdict')
+                notes = body.get('notes', '')
+                if not isinstance(notes, str) or len(notes) > 2000:
+                    raise ValueError('Review notes must be at most 2000 characters')
+                import datetime as dt
+                review = {'verdict': verdict, 'notes': notes,
+                          'reviewed_utc': dt.datetime.now(dt.timezone.utc).isoformat()}
+                path.with_name(summary + '.review.json').write_text(json.dumps(review, indent=2), encoding='utf-8')
+                self.reply(200, {'message': 'Human review saved. No Hafnia request or XProtect event sent.'})
+                return
             password = body.pop('password', '')
             if not isinstance(password, str) or not password:
                 raise ValueError('Enter the password for this operation')
