@@ -24,6 +24,26 @@ Replace YOUR-CAMERA-ID with the actual ID. The command privately prompts for the
 
 Candidates and conflicting or uncertain responses require human review. A clear assessment never automatically closes an incident. Current prompts remain experimental; managed-roadworks classification has produced conflicting answers in manual tests.
 
+## Local operator web app
+
+On p039, from the repository folder:
+
+```powershell
+py roadwatch_web.py
+```
+
+Keep PowerShell open and visit http://127.0.0.1:8765 in Edge on p039. The server listens only on loopback; no firewall or Tailscale changes are needed. Ctrl+C stops it.
+
+The page loads existing runtime assessments, requests one new assessment per explicit click, and can submit a reviewed candidate as one XProtect event. Enter the gateway password for assessments and the roadwatch-dev basic-user password for events. Credentials are not stored. Camera and event GUID defaults match the current p039 setup; replace them after a rebuild.
+
+An event marked accepted still needs confirmation in Smart Client. A submission marked attempting may have been delivered: inspect Alarm Manager before retrying. Only one modifying operation runs at a time. The page has no automatic retries, camera video player, geometry detection, acknowledgement synchronization, or continuous monitoring.
+
+Run local HTTP tests without XProtect or Hafnia:
+
+```powershell
+py -m unittest discover -s tests
+```
+
 ## Supporting tools
 
 - Open tools/lane-marker.html in a browser to draw open-lane and closed-work-area regions and export normalized image coordinates. Region data is not yet consumed by the backend.

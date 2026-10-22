@@ -22,14 +22,14 @@ def make_event(event_type, camera, tag, when=None):
             'datatype': 'analytics', 'data': {}, 'tag': tag}
 
 
-def main():
+def main(argv=None, password=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--event-type-id', required=True, type=uuid.UUID)
     parser.add_argument('--user', required=True, help='XProtect BASIC user, not gateway administrator')
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--test-camera-id', type=uuid.UUID, help='Send one TEST event for this camera')
     mode.add_argument('--result', type=Path, help='Explicitly send one saved candidate assessment')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     marker = None
     if args.result:
         saved = json.loads(args.result.read_text(encoding='utf-8'))
@@ -62,7 +62,8 @@ def main():
             return response.status, json.loads(raw) if raw else None
 
     print('Sends ONE event to XProtect. This may create an operator alarm. No Hafnia request.')
-    password = getpass.getpass('XProtect basic-user password (not saved): ')
+    if password is None:
+        password = getpass.getpass('XProtect basic-user password (not saved): ')
     try:
         _, login = request('/API/IDP/connect/token', urllib.parse.urlencode({
             'grant_type': 'password', 'client_id': 'GrantValidatorClient',

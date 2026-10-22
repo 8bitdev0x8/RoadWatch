@@ -52,11 +52,11 @@ def interpret(raw):
         return {'disposition': 'needs_review', 'validation_error': str(exc)}
 
 
-def main():
+def main(argv=None, password=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--camera-id', required=True, type=uuid.UUID)
     parser.add_argument('--seconds', type=int, choices=range(5, 61), default=15, metavar='5..60')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     prompt = (ROOT / 'prompts/road-obstruction.txt').read_text(encoding='utf-8')
     # This client accepts only the provisioned local gateway's self-signed cert.
     context = ssl._create_unverified_context()
@@ -73,7 +73,8 @@ def main():
 
     try:
         print('One-shot check: at most one new summary request. No automatic retries or alarms.')
-        password = getpass.getpass('Local Hafnia gateway password (not saved): ')
+        if password is None:
+            password = getpass.getpass('Local Hafnia gateway password (not saved): ')
         session = call('POST', '/api/Sessions/Login', {'Name': 'administrator', 'Password': password})['Id']
         del password
         end = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
@@ -102,6 +103,7 @@ def main():
         target.write_text(json.dumps(result, indent=2), encoding='utf-8')
         print('Disposition:', result['disposition'])
         print('Saved:', target)
+        return result
     finally:
         if session:
             try:
